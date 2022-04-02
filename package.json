@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/devonChurch/peacherine#readme",
   "devDependencies": {
+    "@semantic-release/git": "^10.0.1",
     "semantic-release": "^19.0.2"
   }
 }
