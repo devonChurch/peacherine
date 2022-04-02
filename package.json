@@ -1,0 +1,23 @@
+{
+  "name": "peacherine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devonChurch/peacherine.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/devonChurch/peacherine/issues"
+  },
+  "homepage": "https://github.com/devonChurch/peacherine#readme",
+  "devDependencies": {
+    "semantic-release": "^19.0.2"
+  }
+}
