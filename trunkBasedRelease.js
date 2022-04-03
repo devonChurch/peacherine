@@ -4,7 +4,8 @@
 
 const childProcess = require("child_process");
 const util = require("util");
-const semver = require('semver')
+const semver = require('semver');
+const { name: PACKAGE_NAME } = require("./package.json");
 
 const execAsync = util.promisify(childProcess.exec);
 
@@ -12,42 +13,101 @@ const executeAsyncCommand = async (command) => (await execAsync(command)).stdout
 
 const getCurrentBranchName = async () => executeAsyncCommand("git branch --show-current");
 
-const getGitTags = async (regex) => {
+const getGitLatestTag = async (regex) => {
     const tags = await executeAsyncCommand("git tag --list");
     return (tags ?? "")
         .split("\n")
+        .reverse()
         .find(tag => regex.test(tag))
         // .sort((next, prev) => semver.gt(next, prev) ? 1 : -1)
         // .slice(-1)[0];
     // return (tags ?? "").split("\n").reverse().find(tag => regex.test(tag));
 };
 
+const getCommitsToCompare = async ({ start, end }) => {
+    return executeAsyncCommand(`git log --oneline --pretty=format:%s ${start}..${end}`);
+};
+
+const parseBumpTypeFromCommits = (commits) => {
+    const accumulator = { major: false, minor: false, patch: false }
+    const reducer = (acc, commit) => {
+        // const key = (
+        //     (/(fix|feat)!:/.test(commit) && "major") ||
+        //     (/feat:/.test(commit) && "minor") ||
+        //     (/fix:/.test(commit) && "patch")
+        // );
+
+        // console.log("!!! ", key, commit, acc);
+        // accumulator?.[key] = true;
+        return {
+            ...acc,
+            [(
+                (/(fix|feat)!:/.test(commit) && "major") ||
+                (/feat:/.test(commit) && "minor") ||
+                (/fix:/.test(commit) && "patch")
+            )]: true
+        };
+        // fix: = patch
+        // feat: = minor
+        // fix!: or feat!: = major
+    };
+    const { major, minor, patch } = commits.split("\n").reduce(reducer, accumulator);
+
+    // console.log(">>> ", { major, minor, patch });
+
+    return (
+        (major && "major") ||
+        (minor && "minor") ||
+        "patch"
+        // (patch && "patch") ||
+        // undefined
+    )
+
+};
+
+const getLastConsumerRelease = async () => {
+
+    const distTags = executeAsyncCommand(`npm view ${PACKAGE_NAME} dist-tags --json`);
+    console.log(typeof distTags);
+    console.log("distTags", distTags);
+
+};
+
 const alphaRelease = {
     getName: () => "alphaRelease",
     checkScenario: ({ branchName }) => /(fix|feature)\/.*$/.test(branchName),
-    createSemVer: ({ buildName, buildId, gitTags }) => {
+    createGitTag: ({ nextVersion, buildName, buildId }) => `${nextVersion}-beta-${buildId}`,
+    createSemVer: async () => {
         // `0.0.0-alpha-${buildName}-${buildId}`
+
+        const nextVersion = `0.0.0`;
+        // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
+
+        return nextVersion;
+
     }
 };
 
 const betaRelease = {
     getName: () => "betaRelease",
     checkScenario: ({ branchName }) => /main$/.test(branchName),
-    // getLastVersion: async () => {
-    getLastTag: async () => {
-        return (await getGitTags(/-beta-/)).slice(-1)[0];
-        // git tag v1.3.0-beta-1a2b3c
-        // return semver.coerce(lastTag ?? "1.0.0");
-    },
-    getCommitsToCompare: ({ start, end }) => {
-        await getGitTags(`git log --oneline --pretty=format:%h${DELIMITER}%cI ${start}..${end}`);
-    },
-    createSemVer: ({ buildName, buildId, gitTags }) => {
-        const lastTag = await this.getLastTag();
-        console.log("lastTag", lastTag);
+    createGitTag: ({ nextVersion, buildId }) => `${nextVersion}-beta-${buildId}`,
+    createSemVer: async ({ buildId }) => {
+        
+        const nextVersion = `0.0.0`;
+        const nextTag = `v${nextVersion}-beta-${buildId}`;
+        const distTag = "next";
 
-        const commits = getCommitsToCompare({ start: lastTag, end: branch})
 
+        await executeAsyncCommand(`npm version ${nextTag} --git-tag-version=false`);
+        
+        await executeAsyncCommand(`npm publish ./ --tag="${distTag}"`);
+        
+        await executeAsyncCommand(`git tag --annotate ${nextTag} --message="publish beta release id:${buildId}"`);
+        
+        await executeAsyncCommand(`git push origin ${nextTag}`);
+        
+        // return nextVersion;
 
         // Get last "next" tag
         // find commit between last tag and HEAD
@@ -80,18 +140,51 @@ const betaRelease = {
 const consumerRelease = {
     getName: () => "consumerRelease",
     checkScenario: ({ branchName, environment }) => /release\/.*$/.test(branchName),
-    // getLastVersion: async () => {
-    getLastTag: async ({ buildName }) => {
-        const regex = new RegExp(buildName)
-        return await getGitTags(regex);
-        // (new RegExp("foo-bar")).test("v1.2.3-foo-bar-1a2b3c")
-        // const lastTag = await getGitTags(/^v\d*\.\d*\.\d*$/);
-        // return semver.coerce(lastTag);
-        // const lastTag = await getGitTags(/xxxxxx/);
-        // return semver.coerce(lastTag);
-    },
-    
-    createSemVer: ({ buildName, buildId, gitTags }) => {
+    // createGitTag: ({ nextVersion, buildName }) => `${nextVersion}-latest-${buildName}`,
+    createSemVer: async ({ buildName }) => {
+
+        const lastTag = (await getGitLatestTag(new RegExp(`-latest-${buildName}`)));
+        console.log("lastTag", lastTag);
+        // If its not there then we need to get the branch commit from main
+        
+        const commits = await getCommitsToCompare({ start: lastTag, end: "HEAD"});
+        console.log("commits", commits);
+        
+        const bumpType = await parseBumpTypeFromCommits(commits);
+        console.log("bumpType", bumpType);
+        
+        const lastVersion = await getLastConsumerRelease();
+        console.log("lastVersion", lastVersion);
+
+        const  {major, minor, patch } = semver.coerce(lastTag);
+        const bumpVersionSegment = (type, current) => bumpType === type ? current + 1 : current;
+        // return `${bumpVersionSegment("major", major)}.${bumpVersionSegment("minor", minor)}.${bumpVersionSegment("patch", patch)}`;
+        const nextVersion = (
+            bumpVersionSegment("major", major) +
+            `.` +
+            bumpVersionSegment("minor", minor) +
+            `.` +
+            bumpVersionSegment("patch", patch)
+            // bumpVersionSegment("patch", patch) +
+            // `-latest` +
+            // `-${buildName}`
+        );
+        console.log("nextVersion", nextVersion);
+
+
+        const nextTag = `v${nextVersion}-latest-${buildName}`
+        console.log("nextTag", nextTag);
+
+
+        // await executeAsyncCommand(`npm version --git-tag-version=false`);
+
+
+        // ADD DIST_TAG!!!!!!
+
+        return nextVersion;
+
+
+
         // Meta data:
             // last branch/build
             // commit sha
@@ -122,7 +215,7 @@ const RELEASE_SCENARIOS = [
 
 
 
-// const getGitTags = async (regex) => (await executeAsyncCommand("git tag --list"))
+// const getGitLatestTag = async (regex) => (await executeAsyncCommand("git tag --list"))
 //     .then(tags => tags.reverse().find(tag => regex.test(tag)));
 
 
@@ -163,18 +256,33 @@ const releaseProject = async () => {
     // git tag
     // Can regex tags
         // https://git-scm.com/docs/git-tag
-    const gitTags = "xxxxx"; // git tags >> .trim().split("\n").filter(xxx => xxx.trim());
+    // const gitTags = "xxxxx"; // git tags >> .trim().split("\n").filter(xxx => xxx.trim());
     const branchName = await getCurrentBranchName();
-    const buildName = "xxxx-xxxx";
-    const buildId = "1a2b3c4d5e6f";
+    const buildName = branchName.replace(/(\/|_|\.)/g, "-");
+    const buildId = `${Math.random()}`;
     const environment = "test";
 
     console.log("branchName", branchName);
 
     // What type of release is this?
     const releaseScenario = RELEASE_SCENARIOS.find(({ checkScenario }) => checkScenario({ branchName, environment }));
-    const releaseVersion = releaseScenario.createSemVer({ branchName, buildName, buildId, gitTags });
     console.log("releaseScenario", releaseScenario.getName());
+    
+    await releaseScenario.createSemVer({ branchName, buildName, buildId });
+    
+    // const nextVersion = await releaseScenario.createSemVer({ branchName, buildName, buildId });
+    // console.log("nextVersion", nextVersion);
+    
+    // const nextTag = releaseScenario.createGitTag({ nextVersion, buildName, buildId });
+    // console.log("nextTag", nextTag);
+
+
+    // await executeAsyncCommand(`npm version --git-tag-version=false`);
+
+    // .
+    // .
+    // .
+    // .
     
     // const lastTag = await releaseScenario.getLastTag({ buildName });
     // console.log("lastTag", lastTag);
