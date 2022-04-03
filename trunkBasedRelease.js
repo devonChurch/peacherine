@@ -73,10 +73,23 @@ const getLastConsumerRelease = async () => {
 
 };
 
+const publishPackage = async ({ nextVersion, nextTag, distTag, publishMessage }) => {
+
+    console.log("publishPackage", { nextVersion, nextTag, distTag, publishMessage });
+
+    await executeAsyncCommand(`npm version ${nextVersion} --git-tag-version=false`);
+        
+    await executeAsyncCommand(`npm publish ./ --tag="${distTag}"`);
+    
+    await executeAsyncCommand(`git tag --annotate ${nextTag} --message="${publishMessage}"`);
+    
+    await executeAsyncCommand(`git push origin ${nextTag}`);
+};
+
 const alphaRelease = {
     getName: () => "alphaRelease",
     checkScenario: ({ branchName }) => /(fix|feature)\/.*$/.test(branchName),
-    createGitTag: ({ nextVersion, buildName, buildId }) => `${nextVersion}-beta-${buildId}`,
+    // createGitTag: ({ nextVersion, buildName, buildId }) => `${nextVersion}-beta-${buildId}`,
     createSemVer: async () => {
         // `0.0.0-alpha-${buildName}-${buildId}`
 
@@ -91,21 +104,16 @@ const alphaRelease = {
 const betaRelease = {
     getName: () => "betaRelease",
     checkScenario: ({ branchName }) => /main$/.test(branchName),
-    createGitTag: ({ nextVersion, buildId }) => `${nextVersion}-beta-${buildId}`,
+    // createGitTag: ({ nextVersion, buildId }) => `${nextVersion}-beta-${buildId}`,
     createSemVer: async ({ buildId }) => {
         
         const nextVersion = `0.0.0`;
         const nextTag = `v${nextVersion}-beta-${buildId}`;
         const distTag = "next";
+        const publishMessage = `publish beta @${distTag} release ${nextTag}`;
 
+        await publishPackage({ nextVersion: nextTag, nextTag, distTag, publishMessage });
 
-        await executeAsyncCommand(`npm version ${nextTag} --git-tag-version=false`);
-        
-        await executeAsyncCommand(`npm publish ./ --tag="${distTag}"`);
-        
-        await executeAsyncCommand(`git tag --annotate ${nextTag} --message="publish beta release id:${buildId}"`);
-        
-        await executeAsyncCommand(`git push origin ${nextTag}`);
         
         // return nextVersion;
 
@@ -141,13 +149,16 @@ const consumerRelease = {
     getName: () => "consumerRelease",
     checkScenario: ({ branchName, environment }) => /release\/.*$/.test(branchName),
     // createGitTag: ({ nextVersion, buildName }) => `${nextVersion}-latest-${buildName}`,
-    createSemVer: async ({ buildName }) => {
+    createSemVer: async ({ branchName, buildName }) => {
 
-        const lastTag = (await getGitLatestTag(new RegExp(`-latest-${buildName}`)));
-        console.log("lastTag", lastTag);
+        const prevReleaseTag = (await getGitLatestTag(new RegExp(`-latest-${buildName}`)));
+        console.log("prevReleaseTag", prevReleaseTag);
+
         // If its not there then we need to get the branch commit from main
+        const mergeBaseSha = !prevReleaseTag && await executeAsyncCommand(`git merge-base main ${branchName}`);
+        console.log("mergeBaseSha", mergeBaseSha);
         
-        const commits = await getCommitsToCompare({ start: lastTag, end: "HEAD"});
+        const commits = await getCommitsToCompare({ start: prevReleaseTag ?? mergeBaseSha, end: "HEAD"});
         console.log("commits", commits);
         
         const bumpType = await parseBumpTypeFromCommits(commits);
@@ -156,7 +167,7 @@ const consumerRelease = {
         const lastVersion = await getLastConsumerRelease();
         console.log("lastVersion", lastVersion);
 
-        const  {major, minor, patch } = semver.coerce(lastTag);
+        const  {major, minor, patch } = semver.coerce(prevReleaseTag);
         const bumpVersionSegment = (type, current) => bumpType === type ? current + 1 : current;
         // return `${bumpVersionSegment("major", major)}.${bumpVersionSegment("minor", minor)}.${bumpVersionSegment("patch", patch)}`;
         const nextVersion = (
@@ -175,13 +186,17 @@ const consumerRelease = {
         const nextTag = `v${nextVersion}-latest-${buildName}`
         console.log("nextTag", nextTag);
 
+        const distTag = "next";
+        const publishMessage = `publish beta @${distTag} release ${nextTag}`;
+
+        await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
+
 
         // await executeAsyncCommand(`npm version --git-tag-version=false`);
 
 
         // ADD DIST_TAG!!!!!!
 
-        return nextVersion;
 
 
 
