@@ -65,11 +65,10 @@ const parseBumpTypeFromCommits = (commits) => {
 
 };
 
-const getLastConsumerRelease = async () => {
+const getLatestConsumerRelease = async () => {
 
-    const distTags = executeAsyncCommand(`npm view ${PACKAGE_NAME} dist-tags --json`);
-    console.log(typeof distTags);
-    console.log("distTags", distTags);
+    const distTags = await executeAsyncCommand(`npm view ${PACKAGE_NAME} dist-tags --json`);
+    return JSON.parse(distTags).latest;
 
 };
 
@@ -107,8 +106,8 @@ const betaRelease = {
     // createGitTag: ({ nextVersion, buildId }) => `${nextVersion}-beta-${buildId}`,
     createSemVer: async ({ buildId }) => {
         
-        const nextVersion = `0.0.0`;
-        const nextTag = `v${nextVersion}-beta-${buildId}`;
+        const nextVersion = `0.0.0-beta-${buildId}`;
+        const nextTag = `v${nextVersion}`;
         const distTag = "next";
         const publishMessage = `publish beta @${distTag} release ${nextTag}`;
 
@@ -158,16 +157,16 @@ const consumerRelease = {
         const mergeBaseSha = !prevReleaseTag && await executeAsyncCommand(`git merge-base main ${branchName}`);
         console.log("mergeBaseSha", mergeBaseSha);
         
-        const commits = await getCommitsToCompare({ start: prevReleaseTag ?? mergeBaseSha, end: "HEAD"});
+        const commits = await getCommitsToCompare({ start: `${prevReleaseTag ?? mergeBaseSha}^`, end: "HEAD"});
         console.log("commits", commits);
         
         const bumpType = await parseBumpTypeFromCommits(commits);
         console.log("bumpType", bumpType);
         
-        const lastVersion = await getLastConsumerRelease();
+        const lastVersion = await getLatestConsumerRelease();
         console.log("lastVersion", lastVersion);
 
-        const  {major, minor, patch } = semver.coerce(prevReleaseTag);
+        const  {major, minor, patch } = semver.coerce(lastVersion);
         const bumpVersionSegment = (type, current) => bumpType === type ? current + 1 : current;
         // return `${bumpVersionSegment("major", major)}.${bumpVersionSegment("minor", minor)}.${bumpVersionSegment("patch", patch)}`;
         const nextVersion = (
@@ -186,7 +185,7 @@ const consumerRelease = {
         const nextTag = `v${nextVersion}-latest-${buildName}`
         console.log("nextTag", nextTag);
 
-        const distTag = "next";
+        const distTag = "latest";
         const publishMessage = `publish beta @${distTag} release ${nextTag}`;
 
         await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
