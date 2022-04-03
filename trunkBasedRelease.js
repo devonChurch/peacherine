@@ -156,8 +156,8 @@ const consumerRelease = {
         // If its not there then we need to get the branch commit from main
         const mergeBaseSha = !prevReleaseTag && await executeAsyncCommand(`git merge-base main ${branchName}`);
         console.log("mergeBaseSha", mergeBaseSha);
-        
-        const commits = await getCommitsToCompare({ start: `${prevReleaseTag ?? mergeBaseSha}^`, end: "HEAD"});
+
+        const commits = await getCommitsToCompare({ start: prevReleaseTag ?? `${mergeBaseSha}^`, end: "HEAD"});
         console.log("commits", commits);
         
         const bumpType = await parseBumpTypeFromCommits(commits);
