@@ -90,13 +90,20 @@ const alphaRelease = {
     getName: () => "alphaRelease",
     checkScenario: ({ branchName }) => /(fix|feature)\/.*$/.test(branchName),
     // createGitTag: ({ nextVersion, buildName, buildId }) => `${nextVersion}-beta-${buildId}`,
-    createSemVer: async () => {
+    createSemVer: async ({ buildName, buildId }) => {
         // `0.0.0-alpha-${buildName}-${buildId}`
 
-        const nextVersion = `0.0.0`;
-        // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
+        const nextVersion = `0.0.0-alpha-${buildName}-${buildId}`;
+        const nextTag = `v${nextVersion}`;
+        const distTag = "alpha";
+        const publishMessage = `publish alpha release ${nextTag}`;
 
-        return nextVersion;
+        await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
+
+        // const nextVersion = `0.0.0`;
+        // // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
+
+        // return nextVersion;
 
     }
 };
@@ -109,10 +116,10 @@ const betaRelease = {
         
         const nextVersion = `0.0.0-beta-${buildId}`;
         const nextTag = `v${nextVersion}`;
-        const distTag = "next";
+        const distTag = "beta";
         const publishMessage = `publish beta @${distTag} release ${nextTag}`;
 
-        await publishPackage({ nextVersion: nextTag, nextTag, distTag, publishMessage });
+        await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
 
         
         // return nextVersion;
@@ -279,7 +286,7 @@ const releaseProject = async () => {
     // const gitTags = "xxxxx"; // git tags >> .trim().split("\n").filter(xxx => xxx.trim());
     const branchName = await getCurrentBranchName();
     const buildName = branchName.replace(/(\/|_|\.)/g, "-");
-    const buildId = `${Math.random()}`;
+    const buildId = Math.floor(Math.random() * 100000) + ""; // 5 digit string.
     const environment = "test";
 
     console.log("branchName", branchName);
