@@ -286,7 +286,7 @@ const releaseProject = async () => {
     // const gitTags = "xxxxx"; // git tags >> .trim().split("\n").filter(xxx => xxx.trim());
     const branchName = await getCurrentBranchName();
     const buildName = branchName.replace(/(\/|_|\.)/g, "-");
-    const buildId = `${Math.random()}`;
+    const buildId = Math.floor(Math.random() * 100000) + ""; // 5 digit string.
     const environment = "test";
 
     console.log("branchName", branchName);
