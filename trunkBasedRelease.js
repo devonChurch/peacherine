@@ -25,7 +25,8 @@ const getGitLatestTag = async (regex) => {
 };
 
 const getCommitsToCompare = async ({ start, end }) => {
-    return executeAsyncCommand(`git log --oneline --pretty=format:%s ${start}..${end}`);
+    const range = (start && end && `${start}..${end}`) ?? "";
+    return executeAsyncCommand(`git log --oneline --pretty=format:%s ${range}`);
 };
 
 const parseBumpTypeFromCommits = (commits) => {
@@ -157,7 +158,12 @@ const consumerRelease = {
         const mergeBaseSha = !prevReleaseTag && await executeAsyncCommand(`git merge-base main ${branchName}`);
         console.log("mergeBaseSha", mergeBaseSha);
 
-        const commits = await getCommitsToCompare({ start: prevReleaseTag ?? `${mergeBaseSha}^`, end: "HEAD"});
+        // const commits = await getCommitsToCompare({ start: prevReleaseTag ?? `${mergeBaseSha}^`, end: "HEAD"});
+        const commits = (
+            (prevReleaseTag && await getCommitsToCompare({ start: prevReleaseTag, end: "HEAD"})) ||
+            (mergeBaseSha && await getCommitsToCompare({ start: `${mergeBaseSha}^`, end: "HEAD"})) ||
+            await getCommitsToCompare()
+        );
         console.log("commits", commits);
         
         const bumpType = await parseBumpTypeFromCommits(commits);
