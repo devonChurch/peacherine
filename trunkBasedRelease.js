@@ -5,15 +5,13 @@ const { name: PACKAGE_NAME } = require("./package.json");
 
 const execAsync = util.promisify(childProcess.exec);
 const executeAsyncCommand = async (command) => (await execAsync(command)).stdout.toString().trim();
-const getCurrentBranchName = async () => executeAsyncCommand("git branch --show-current");
 
-const getGitLatestTag = async (regex) => {
-    const tags = await executeAsyncCommand("git tag --list");
-    return (tags ?? "")
+const getGitLatestTag = async (regex) => (
+    (await executeAsyncCommand("git tag --list") ?? "")
         .split("\n")
         .reverse()
         .find(tag => regex.test(tag))
-};
+);
 
 const getCommitsToCompare = async ({ start, end }) => {
     const range = (start && end && `${start}..${end}`) || "";
@@ -52,7 +50,6 @@ const publishPackage = async ({ nextVersion, nextTag, distTag, publishMessage })
 };
 
 const alphaRelease = {
-    getName: () => "alphaRelease",
     checkScenario: ({ branchName }) => /(fix|feature)\/.*$/.test(branchName),
     createSemVer: async ({ buildName, buildId }) => {
         const nextVersion = `0.0.0-alpha-${buildName}-${buildId}`;
@@ -65,7 +62,6 @@ const alphaRelease = {
 };
 
 const betaRelease = {
-    getName: () => "betaRelease",
     checkScenario: ({ branchName }) => /main$/.test(branchName),
     createSemVer: async ({ buildId }) => {
         const nextVersion = `0.0.0-beta-${buildId}`;
@@ -78,8 +74,7 @@ const betaRelease = {
 };
 
 const consumerRelease = {
-    getName: () => "consumerRelease",
-    checkScenario: ({ branchName, environment }) => /release\/.*$/.test(branchName) /* && environment === "live" */,
+    checkScenario: ({ branchName, environment }) => /release\/.*$/.test(branchName) && environment === "live",
     createSemVer: async ({ branchName, buildName }) => {
         const prevReleaseTag = (await getGitLatestTag(new RegExp(`-latest-${buildName}`)));
         const mergeBaseSha = !prevReleaseTag && await executeAsyncCommand(`git merge-base main ${branchName}`);
@@ -113,12 +108,20 @@ const RELEASE_SCENARIOS = [
     consumerRelease,
 ];
 
-module.exports = releaseProject = async () => {
-    const branchName = await getCurrentBranchName();
-    const buildName = branchName.replace(/(\/|_|\.)/g, "-");
-    const buildId = Math.floor(Math.random() * 100000) + ""; // 5 digit string.
-    const environment = "test";
+module.exports = releaseProject = async ({ branchName, buildName, buildId, environment }) => {
     const releaseScenario = RELEASE_SCENARIOS.find(({ checkScenario }) => checkScenario({ branchName, environment }));
-    
     await releaseScenario.createSemVer({ branchName, buildName, buildId });
 };
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+// Example usage:
+// --------------
+// All of these references will come from your CI pipeline.
+releaseProject({
+    branchName: "release/four",
+    buildName: "release-four",
+    buildId: Math.floor(Math.random() * 100000) + "", // 5 digit string.
+    environment: "live"
+});
