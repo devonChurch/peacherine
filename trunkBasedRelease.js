@@ -79,7 +79,7 @@ const publishPackage = async ({ nextVersion, nextTag, distTag, publishMessage })
 
     await executeAsyncCommand(`npm version ${nextVersion} --git-tag-version=false`);
         
-    await executeAsyncCommand(`npm publish ./ --tag="${distTag}"`);
+    await executeAsyncCommand(`npm publish ./ ${distTag ? `--tag="${distTag}"` : ""}`);
     
     await executeAsyncCommand(`git tag --annotate ${nextTag} --message="${publishMessage}"`);
     
@@ -90,13 +90,19 @@ const alphaRelease = {
     getName: () => "alphaRelease",
     checkScenario: ({ branchName }) => /(fix|feature)\/.*$/.test(branchName),
     // createGitTag: ({ nextVersion, buildName, buildId }) => `${nextVersion}-beta-${buildId}`,
-    createSemVer: async () => {
+    createSemVer: async ({ buildName, buildId }) => {
         // `0.0.0-alpha-${buildName}-${buildId}`
 
-        const nextVersion = `0.0.0`;
-        // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
+        const nextVersion = `0.0.0-alpha-${buildName}-${buildId}`;
+        const nextTag = `v${nextVersion}`;
+        const publishMessage = `publish alpha release ${nextTag}`;
 
-        return nextVersion;
+        await publishPackage({ nextVersion: nextTag, nextTag, publishMessage });
+
+        // const nextVersion = `0.0.0`;
+        // // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
+
+        // return nextVersion;
 
     }
 };
