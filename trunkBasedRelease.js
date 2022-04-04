@@ -79,7 +79,7 @@ const publishPackage = async ({ nextVersion, nextTag, distTag, publishMessage })
 
     await executeAsyncCommand(`npm version ${nextVersion} --git-tag-version=false`);
         
-    await executeAsyncCommand(`npm publish ./ ${distTag ? `--tag="${distTag}"` : ""}`);
+    await executeAsyncCommand(`npm publish ./ --tag="${distTag}"`);
     
     await executeAsyncCommand(`git tag --annotate ${nextTag} --message="${publishMessage}"`);
     
@@ -95,9 +95,10 @@ const alphaRelease = {
 
         const nextVersion = `0.0.0-alpha-${buildName}-${buildId}`;
         const nextTag = `v${nextVersion}`;
+        const distTag = "alpha";
         const publishMessage = `publish alpha release ${nextTag}`;
 
-        await publishPackage({ nextVersion: nextTag, nextTag, publishMessage });
+        await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
 
         // const nextVersion = `0.0.0`;
         // // const nextTag = `0.0.0-alpha-${buildName}-${buildId}`;
@@ -115,10 +116,10 @@ const betaRelease = {
         
         const nextVersion = `0.0.0-beta-${buildId}`;
         const nextTag = `v${nextVersion}`;
-        const distTag = "next";
+        const distTag = "beta";
         const publishMessage = `publish beta @${distTag} release ${nextTag}`;
 
-        await publishPackage({ nextVersion: nextTag, nextTag, distTag, publishMessage });
+        await publishPackage({ nextVersion, nextTag, distTag, publishMessage });
 
         
         // return nextVersion;
